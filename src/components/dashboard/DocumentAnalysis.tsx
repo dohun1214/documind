@@ -78,9 +78,6 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   const [translating, setTranslating] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  // PDF export state
-  const [exporting, setExporting] = useState(false)
-
   // Upgrade modal
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [upgradeHint, setUpgradeHint] = useState('')
@@ -264,29 +261,13 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function handleExportPdf() {
+  function handleExportPdf() {
     if (!isPro) {
       setUpgradeHint('PDF 내보내기는 Pro 전용 기능입니다. 업그레이드하면 요약, 핵심 포인트, 질의응답 기록을 PDF로 저장할 수 있습니다.')
       setUpgradeOpen(true)
       return
     }
-    setExporting(true)
-    try {
-      const res = await fetch(`/api/documents/${doc.id}/export-pdf`)
-      if (!res.ok) throw new Error(await res.text())
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = Object.assign(document.createElement('a'), {
-        href: url,
-        download: `${doc.title}.pdf`,
-      })
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'PDF 내보내기에 실패했습니다.')
-    } finally {
-      setExporting(false)
-    }
+    window.open(`/print/${doc.id}`, '_blank')
   }
 
   function handleTabClick(id: Tab) {
@@ -334,11 +315,9 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
           size="sm"
           className="shrink-0 gap-1.5"
           onClick={handleExportPdf}
-          disabled={exporting || docStatus !== 'ready'}
+          disabled={docStatus !== 'ready'}
         >
-          {exporting
-            ? <LoadingSpinner className="h-3.5 w-3.5" />
-            : <Download className="h-3.5 w-3.5" />}
+          <Download className="h-3.5 w-3.5" />
           PDF 내보내기
           {!isPro && <Zap className="h-3 w-3 text-indigo-500 ml-0.5" />}
         </Button>
