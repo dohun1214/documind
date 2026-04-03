@@ -25,6 +25,7 @@ export async function createCheckoutUrl(
       embed: false,
       media: true,
       logo: true,
+      successUrl: options.redirectUrl ?? (appUrl ? `${appUrl}/dashboard` : undefined),
     },
     checkoutData: {
       email: options.email,
@@ -34,7 +35,6 @@ export async function createCheckoutUrl(
     },
     productOptions: {
       enabledVariants: [parseInt(variantId)],
-      redirectUrl: options.redirectUrl ?? (appUrl ? `${appUrl}/dashboard` : undefined),
       receiptButtonText: 'Go to Dashboard',
       receiptThankYouNote: 'Thank you for upgrading to Pro!',
     },
