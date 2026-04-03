@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, CSSProperties } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -82,8 +82,11 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [upgradeHint, setUpgradeHint] = useState('')
 
+  const [exporting, setExporting] = useState(false)
+
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -261,13 +264,49 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
     setTimeout(() => setCopied(false), 2000)
   }
 
-  function handleExportPdf() {
+  async function handleExportPdf() {
     if (!isPro) {
       setUpgradeHint('PDF 내보내기는 Pro 전용 기능입니다. 업그레이드하면 요약, 핵심 포인트, 질의응답 기록을 PDF로 저장할 수 있습니다.')
       setUpgradeOpen(true)
       return
     }
-    window.open(`/print/${doc.id}`, '_blank')
+    if (!printRef.current) return
+    setExporting(true)
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas-pro'),
+        import('jspdf'),
+      ])
+
+      const canvas = await html2canvas(printRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+      })
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.92)
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pageW = pdf.internal.pageSize.getWidth()
+      const pageH = pdf.internal.pageSize.getHeight()
+      const imgH = (canvas.height / canvas.width) * pageW
+
+      let remaining = imgH
+      let offset = 0
+      while (remaining > 0) {
+        if (offset > 0) pdf.addPage()
+        pdf.addImage(imgData, 'JPEG', 0, -offset, pageW, imgH)
+        offset += pageH
+        remaining -= pageH
+      }
+
+      const safeName = doc.title.replace(/[<>:"/\\|?*]/g, '').trim() || 'document'
+      pdf.save(`${safeName}_분석결과.pdf`)
+    } catch {
+      toast.error('PDF 생성에 실패했습니다. 다시 시도해주세요.')
+    } finally {
+      setExporting(false)
+    }
   }
 
   function handleTabClick(id: Tab) {
@@ -315,9 +354,9 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
           size="sm"
           className="shrink-0 gap-1.5"
           onClick={handleExportPdf}
-          disabled={docStatus !== 'ready'}
+          disabled={exporting || docStatus !== 'ready'}
         >
-          <Download className="h-3.5 w-3.5" />
+          {exporting ? <LoadingSpinner className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
           PDF 내보내기
           {!isPro && <Zap className="h-3 w-3 text-indigo-500 ml-0.5" />}
         </Button>
@@ -674,6 +713,101 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
           </div>
         </Card>
       </div>
+
+      {/* Hidden print div — captured by html2canvas for PDF export */}
+      <div
+        ref={printRef}
+        aria-hidden="true"
+        style={{
+          position: 'fixed',
+          left: '-9999px',
+          top: 0,
+          width: '794px',
+          background: '#ffffff',
+          color: '#1a1a1a',
+          fontFamily: "'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif",
+          fontSize: '12px',
+          lineHeight: 1.7,
+          padding: '60px',
+        }}
+      >
+        {/* Header */}
+        <div style={{ borderBottom: '2px solid #4f46e5', paddingBottom: '16px', marginBottom: '32px' }}>
+          <div style={{ fontSize: '14px', fontWeight: 700, color: '#4f46e5', marginBottom: '8px' }}>DocuMind</div>
+          <div style={{ fontSize: '20px', fontWeight: 700, color: '#111', marginBottom: '4px' }}>{doc.title}</div>
+          <div style={{ fontSize: '10px', color: '#888' }}>업로드: {formatDate(doc.created_at)} &nbsp;·&nbsp; 내보내기: {new Date().toLocaleDateString('ko-KR')}</div>
+        </div>
+
+        {/* Summary */}
+        {summary && (
+          <PrintSection title="문서 요약">
+            <div style={{ whiteSpace: 'pre-wrap', fontSize: '11px', lineHeight: 1.8 }}>
+              {summary.replace(/#{1,6}\s+/g, '').replace(/\*\*/g, '')}
+            </div>
+          </PrintSection>
+        )}
+
+        {/* Key points */}
+        {keyPoints.length > 0 && (
+          <PrintSection title="핵심 포인트">
+            <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {keyPoints.map((point, i) => (
+                <li key={i} style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'flex-start' }}>
+                  <span style={{
+                    flexShrink: 0, width: '20px', height: '20px', borderRadius: '50%',
+                    background: '#ede9fe', color: '#4f46e5', fontSize: '10px', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>{i + 1}</span>
+                  <span style={{ flex: 1, paddingTop: '1px' }}>{point}</span>
+                </li>
+              ))}
+            </ol>
+          </PrintSection>
+        )}
+
+        {/* Q&A */}
+        {messages.some(m => m.role === 'user') && (
+          <PrintSection title="질의응답 히스토리">
+            {messages.reduce<{ q: string; a: string }[]>((pairs, msg, i) => {
+              if (msg.role === 'user') pairs.push({ q: msg.content, a: messages[i + 1]?.content ?? '' })
+              return pairs
+            }, []).map((pair, i) => (
+              <div key={i} style={{ marginBottom: '16px' }}>
+                <div style={{ fontWeight: 700, color: '#4f46e5', marginBottom: '4px', fontSize: '11px' }}>Q. {pair.q}</div>
+                <div style={{ paddingLeft: '12px', borderLeft: '2px solid #e5e7eb', fontSize: '11px', lineHeight: 1.7 }}>
+                  {pair.a.replace(/#{1,6}\s+/g, '').replace(/\*\*/g, '')}
+                </div>
+              </div>
+            ))}
+          </PrintSection>
+        )}
+
+        {/* Footer */}
+        <div style={{ marginTop: '40px', paddingTop: '12px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#aaa' }}>
+          <span>DocuMind — AI 기반 문서 분석</span>
+          <span>{new Date().toLocaleDateString('ko-KR')}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PrintSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const s: CSSProperties = {
+    marginBottom: '28px',
+  }
+  const h: CSSProperties = {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#4f46e5',
+    borderBottom: '1px solid #e5e7eb',
+    paddingBottom: '6px',
+    marginBottom: '12px',
+  }
+  return (
+    <div style={s}>
+      <div style={h}>{title}</div>
+      {children}
     </div>
   )
 }
