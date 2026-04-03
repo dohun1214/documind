@@ -18,7 +18,7 @@ export async function createCheckoutUrl(
   initLemonSqueezy()
 
   const storeId = process.env.LEMONSQUEEZY_STORE_ID!
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL!
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
 
   const { data, error } = await createCheckout(storeId, variantId, {
     checkoutOptions: {
@@ -34,7 +34,7 @@ export async function createCheckoutUrl(
     },
     productOptions: {
       enabledVariants: [parseInt(variantId)],
-      redirectUrl: options.redirectUrl ?? `${appUrl}/dashboard`,
+      redirectUrl: options.redirectUrl ?? (appUrl ? `${appUrl}/dashboard` : undefined),
       receiptButtonText: 'Go to Dashboard',
       receiptThankYouNote: 'Thank you for upgrading to Pro!',
     },

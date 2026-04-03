@@ -20,10 +20,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
+      ?? new URL(request.url).origin
     const checkoutUrl = await createCheckoutUrl(variantId, {
       email: user.email,
       userId: user.id,
-      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
+      redirectUrl: `${origin}/dashboard`,
     })
 
     return NextResponse.json({ url: checkoutUrl })
