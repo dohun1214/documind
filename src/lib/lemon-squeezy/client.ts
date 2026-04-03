@@ -20,12 +20,24 @@ export async function createCheckoutUrl(
   const storeId = process.env.LEMONSQUEEZY_STORE_ID!
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
 
+  const redirectUrl = options.redirectUrl ?? (appUrl ? `${appUrl}/dashboard` : undefined)
+
+  const productOptionsObj: Record<string, unknown> = {
+    enabledVariants: [parseInt(variantId)],
+    receiptButtonText: 'Go to Dashboard',
+    receiptThankYouNote: 'Thank you for upgrading to Pro!',
+  }
+
+  // redirectUrl이 유효한 https:// URL일 때만 포함
+  if (redirectUrl && redirectUrl.startsWith('https://')) {
+    productOptionsObj.redirectUrl = redirectUrl
+  }
+
   const { data, error } = await createCheckout(storeId, variantId, {
     checkoutOptions: {
       embed: false,
       media: true,
       logo: true,
-      successUrl: options.redirectUrl ?? (appUrl ? `${appUrl}/dashboard` : undefined),
     },
     checkoutData: {
       email: options.email,
@@ -33,11 +45,8 @@ export async function createCheckoutUrl(
         user_id: options.userId,
       },
     },
-    productOptions: {
-      enabledVariants: [parseInt(variantId)],
-      receiptButtonText: 'Go to Dashboard',
-      receiptThankYouNote: 'Thank you for upgrading to Pro!',
-    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    productOptions: productOptionsObj as any,
   })
 
   if (error) {
