@@ -30,9 +30,10 @@ function formatDate(iso: string) {
 
 interface DocumentCardProps {
   document: Document
+  onDelete?: (id: string) => void
 }
 
-export function DocumentCard({ document: doc }: DocumentCardProps) {
+export function DocumentCard({ document: doc, onDelete }: DocumentCardProps) {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
 
@@ -45,7 +46,11 @@ export function DocumentCard({ document: doc }: DocumentCardProps) {
       const res = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
       toast.success('문서가 삭제되었습니다.')
-      router.refresh()
+      if (onDelete) {
+        onDelete(doc.id)
+      } else {
+        router.refresh()
+      }
     } catch {
       toast.error('삭제에 실패했습니다.')
     } finally {

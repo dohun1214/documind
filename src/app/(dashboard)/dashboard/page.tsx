@@ -1,24 +1,89 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 import { buttonVariants } from '@/lib/button-variants'
 import { DocumentCard } from '@/components/dashboard/DocumentCard'
+import { Skeleton } from '@/components/ui/skeleton'
 import { FileText, Upload, Files, BarChart2, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Document } from '@/types'
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+type DocRow = Pick<Document, 'id' | 'title' | 'file_type' | 'file_size' | 'page_count' | 'status' | 'summary' | 'created_at' | 'updated_at'>
 
-  const { data: documents } = await supabase
-    .from('documents')
-    .select('id, title, file_type, file_size, page_count, status, summary, created_at, updated_at')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+export default function DashboardPage() {
+  const [docs, setDocs] = useState<DocRow[] | null>(null)
 
-  const docs = (documents ?? []) as Document[]
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from('documents')
+      .select('id, title, file_type, file_size, page_count, status, summary, created_at, updated_at')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setDocs(data ?? []))
+  }, [])
+
+  function handleDeleteDoc(id: string) {
+    setDocs(prev => (prev ?? []).filter(d => d.id !== id))
+  }
+
+  const header = (
+    <div className="flex items-center justify-between">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">내 문서</h1>
+        <p className="text-muted-foreground">업로드한 문서를 분석하고 질문하세요.</p>
+      </div>
+      <Link
+        href="/dashboard/upload"
+        className={cn(buttonVariants(), 'bg-indigo-600 hover:bg-indigo-700 gap-2')}
+      >
+        <Upload className="h-4 w-4" />
+        문서 업로드
+      </Link>
+    </div>
+  )
+
+  // Loading skeleton while fetching
+  if (docs === null) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <div className="grid grid-cols-3 gap-4">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="rounded-xl border bg-card p-4 flex items-center gap-3">
+              <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-6 w-10" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="rounded-xl border bg-card p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-4/5" />
+                  <Skeleton className="h-3 w-12" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-3 w-14" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
@@ -29,19 +94,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">내 문서</h1>
-          <p className="text-muted-foreground">업로드한 문서를 분석하고 질문하세요.</p>
-        </div>
-        <Link
-          href="/dashboard/upload"
-          className={cn(buttonVariants(), 'bg-indigo-600 hover:bg-indigo-700 gap-2')}
-        >
-          <Upload className="h-4 w-4" />
-          문서 업로드
-        </Link>
-      </div>
+      {header}
 
       {/* Stats bar */}
       <div className="grid grid-cols-3 gap-4">
@@ -83,18 +136,19 @@ export default async function DashboardPage() {
           <p className="text-muted-foreground text-sm mb-6">
             PDF 또는 DOCX 파일을 업로드하면 AI가 즉시 분석해드립니다.
           </p>
-          <Link
-            href="/dashboard/upload"
-            className={cn(buttonVariants(), 'bg-indigo-600 hover:bg-indigo-700 gap-2')}
-          >
+          <Link href="/dashboard/upload" className={cn(buttonVariants(), 'bg-indigo-600 hover:bg-indigo-700 gap-2')}>
             <Upload className="h-4 w-4" />
             첫 문서 업로드하기
           </Link>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {docs.map((doc) => (
-            <DocumentCard key={doc.id} document={doc} />
+          {docs.map(doc => (
+            <DocumentCard
+              key={doc.id}
+              document={doc as Document}
+              onDelete={handleDeleteDoc}
+            />
           ))}
         </div>
       )}
