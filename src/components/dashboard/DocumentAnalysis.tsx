@@ -13,7 +13,7 @@ import {
   FileText, FileType, ArrowLeft, Calendar,
   Hash, MessageSquare, Lightbulb, AlignLeft,
   Send, BrainCircuit, Loader2, Trash2, CheckCircle2, Circle,
-  Languages, Copy, Check, Download, Zap,
+  Languages, Copy, Check, Download, Zap, Info,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -712,60 +712,68 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
             {/* Translate tab */}
             {tab === 'translate' && (
               <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Direction selector */}
-                <div className="border-b p-3 flex items-center gap-3">
-                  <div className="flex rounded-lg border overflow-hidden">
-                    {(['ko-en', 'en-ko'] as TranslateDir[]).map(dir => (
-                      <button
-                        key={dir}
-                        onClick={() => { setTranslateDir(dir); setTranslation('') }}
-                        className={cn(
-                          'px-4 py-1.5 text-sm font-medium transition-colors',
-                          translateDir === dir
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-background text-muted-foreground hover:text-foreground'
-                        )}
-                      >
-                        {dir === 'ko-en' ? '한국어 → 영어' : '영어 → 한국어'}
-                      </button>
-                    ))}
+                {/* Direction selector + action buttons */}
+                <div className="border-b px-3 pt-3 pb-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex rounded-lg border overflow-hidden">
+                      {(['ko-en', 'en-ko'] as TranslateDir[]).map(dir => (
+                        <button
+                          key={dir}
+                          onClick={() => { setTranslateDir(dir); setTranslation('') }}
+                          className={cn(
+                            'px-4 py-1.5 text-sm font-medium transition-colors',
+                            translateDir === dir
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-background text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          {dir === 'ko-en' ? '한국어 → 영어' : '영어 → 한국어'}
+                        </button>
+                      ))}
+                    </div>
+                    <Button
+                      size="sm"
+                      className="bg-indigo-600 hover:bg-indigo-700 gap-1.5 ml-auto"
+                      onClick={handleTranslate}
+                      disabled={translating || docStatus !== 'ready'}
+                    >
+                      {translating
+                        ? <><LoadingSpinner className="h-3.5 w-3.5" /> 번역 중...</>
+                        : <><Languages className="h-3.5 w-3.5" /> 번역하기</>}
+                    </Button>
+                    {translation && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={handleCopyTranslation}
+                          disabled={translating}
+                        >
+                          {copied
+                            ? <><Check className="h-3.5 w-3.5 text-green-500" /> 복사됨</>
+                            : <><Copy className="h-3.5 w-3.5" /> 복사</>}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={handleDownloadTranslationFile}
+                          disabled={translating || downloadingTranslation}
+                        >
+                          {downloadingTranslation
+                            ? <LoadingSpinner className="h-3.5 w-3.5" />
+                            : <Download className="h-3.5 w-3.5" />}
+                          {doc.file_type === 'docx' ? 'DOCX로 다운로드' : 'PDF로 다운로드'}
+                        </Button>
+                      </>
+                    )}
                   </div>
-                  <Button
-                    size="sm"
-                    className="bg-indigo-600 hover:bg-indigo-700 gap-1.5 ml-auto"
-                    onClick={handleTranslate}
-                    disabled={translating || docStatus !== 'ready'}
-                  >
-                    {translating
-                      ? <><LoadingSpinner className="h-3.5 w-3.5" /> 번역 중...</>
-                      : <><Languages className="h-3.5 w-3.5" /> 번역하기</>}
-                  </Button>
-                  {translation && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={handleCopyTranslation}
-                        disabled={translating}
-                      >
-                        {copied
-                          ? <><Check className="h-3.5 w-3.5 text-green-500" /> 복사됨</>
-                          : <><Copy className="h-3.5 w-3.5" /> 복사</>}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={handleDownloadTranslationFile}
-                        disabled={translating || downloadingTranslation}
-                      >
-                        {downloadingTranslation
-                          ? <LoadingSpinner className="h-3.5 w-3.5" />
-                          : <Download className="h-3.5 w-3.5" />}
-                        {doc.file_type === 'docx' ? 'DOCX로 다운로드' : 'PDF로 다운로드'}
-                      </Button>
-                    </>
+                  {doc.file_type === 'pdf' && translation && (
+                    <p className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                      <Info className="h-3 w-3 shrink-0" />
+                      PDF 파일은 원본과 레이아웃이 다를 수 있습니다
+                    </p>
                   )}
                 </div>
 

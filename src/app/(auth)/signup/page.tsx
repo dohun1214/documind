@@ -137,8 +137,9 @@ export default function SignupPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <LoadingSpinner className="mr-2 h-4 w-4" />}
-              Create Account
+              {loading ? (
+                <><LoadingSpinner className="mr-2 h-4 w-4" /> 처리 중...</>
+              ) : 'Create Account'}
             </Button>
           </form>
 

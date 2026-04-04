@@ -91,11 +91,10 @@ export function UpgradeModal({ children, open, onOpenChange, featureHint }: Upgr
             disabled={loading}
           >
             {loading ? (
-              <LoadingSpinner className="mr-2 h-4 w-4" />
+              <><LoadingSpinner className="mr-2 h-4 w-4" /> 처리 중...</>
             ) : (
-              <Zap className="mr-2 h-4 w-4" />
+              <><Zap className="mr-2 h-4 w-4" /> Pro 시작하기 — $9.99/월</>
             )}
-            Pro 시작하기 — $9.99/월
           </Button>
           <p className="text-center text-xs text-muted-foreground">
             언제든 해지 가능 · Lemon Squeezy 보안 결제
