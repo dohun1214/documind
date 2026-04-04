@@ -77,6 +77,7 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   const [translation, setTranslation] = useState('')
   const [translating, setTranslating] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [downloadingTranslation, setDownloadingTranslation] = useState(false)
 
   // Upgrade modal
   const [upgradeOpen, setUpgradeOpen] = useState(false)
@@ -87,6 +88,7 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const printRef = useRef<HTMLDivElement>(null)
+  const translationPrintRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -262,6 +264,74 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
     await navigator.clipboard.writeText(translation)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleDownloadTranslationFile() {
+    if (!isPro) {
+      setUpgradeHint('번역 파일 다운로드는 Pro 전용 기능입니다.')
+      setUpgradeOpen(true)
+      return
+    }
+    if (!translation) return
+    setDownloadingTranslation(true)
+    try {
+      if (doc.file_type === 'docx') {
+        // Call translate-file API to get translated DOCX binary
+        const res = await fetch(`/api/documents/${doc.id}/translate-file`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ direction: translateDir }),
+        })
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(text || '번역 파일 생성에 실패했습니다.')
+        }
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const safeName = doc.title.replace(/[<>:"/\\|?*]/g, '').trim() || 'document'
+        a.download = `${safeName}_translated.docx`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        toast.success('번역된 DOCX가 다운로드되었습니다.')
+      } else {
+        // PDF: capture translationPrintRef with html2canvas → jspdf
+        if (!translationPrintRef.current) return
+        const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+          import('html2canvas-pro'),
+          import('jspdf'),
+        ])
+        const canvas = await html2canvas(translationPrintRef.current, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false,
+        })
+        const imgData = canvas.toDataURL('image/jpeg', 0.92)
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+        const pageW = pdf.internal.pageSize.getWidth()
+        const pageH = pdf.internal.pageSize.getHeight()
+        const imgH = (canvas.height / canvas.width) * pageW
+        let remaining = imgH
+        let offset = 0
+        while (remaining > 0) {
+          if (offset > 0) pdf.addPage()
+          pdf.addImage(imgData, 'JPEG', 0, -offset, pageW, imgH)
+          offset += pageH
+          remaining -= pageH
+        }
+        const safeName = doc.title.replace(/[<>:"/\\|?*]/g, '').trim() || 'document'
+        pdf.save(`${safeName}_translated.pdf`)
+        toast.success('번역된 PDF가 다운로드되었습니다.')
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '다운로드에 실패했습니다.')
+    } finally {
+      setDownloadingTranslation(false)
+    }
   }
 
   async function handleExportPdf() {
@@ -671,16 +741,31 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
                       : <><Languages className="h-3.5 w-3.5" /> 번역하기</>}
                   </Button>
                   {translation && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={handleCopyTranslation}
-                    >
-                      {copied
-                        ? <><Check className="h-3.5 w-3.5 text-green-500" /> 복사됨</>
-                        : <><Copy className="h-3.5 w-3.5" /> 복사</>}
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={handleCopyTranslation}
+                        disabled={translating}
+                      >
+                        {copied
+                          ? <><Check className="h-3.5 w-3.5 text-green-500" /> 복사됨</>
+                          : <><Copy className="h-3.5 w-3.5" /> 복사</>}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={handleDownloadTranslationFile}
+                        disabled={translating || downloadingTranslation}
+                      >
+                        {downloadingTranslation
+                          ? <LoadingSpinner className="h-3.5 w-3.5" />
+                          : <Download className="h-3.5 w-3.5" />}
+                        {doc.file_type === 'docx' ? 'DOCX로 다운로드' : 'PDF로 다운로드'}
+                      </Button>
+                    </>
                   )}
                 </div>
 
@@ -713,6 +798,42 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
           </div>
         </Card>
       </div>
+
+      {/* Hidden translation print div — captured by html2canvas for translated PDF export */}
+      {translation && (
+        <div
+          ref={translationPrintRef}
+          aria-hidden="true"
+          style={{
+            position: 'fixed',
+            left: '-9999px',
+            top: 0,
+            width: '794px',
+            background: '#ffffff',
+            color: '#1a1a1a',
+            fontFamily: "'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif",
+            fontSize: '12px',
+            lineHeight: 1.7,
+            padding: '60px',
+          }}
+        >
+          <div style={{ borderBottom: '2px solid #4f46e5', paddingBottom: '16px', marginBottom: '32px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: '#4f46e5', marginBottom: '8px' }}>DocuMind</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#111', marginBottom: '4px' }}>{doc.title}</div>
+            <div style={{ fontSize: '10px', color: '#888' }}>
+              {translateDir === 'ko-en' ? '한국어 → 영어 번역' : '영어 → 한국어 번역'}
+              &nbsp;·&nbsp;내보내기: {new Date().toLocaleDateString('ko-KR')}
+            </div>
+          </div>
+          <div style={{ fontSize: '11px', lineHeight: 1.8 }}>
+            <MarkdownContent>{translation}</MarkdownContent>
+          </div>
+          <div style={{ marginTop: '40px', paddingTop: '12px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#aaa' }}>
+            <span>DocuMind — AI 기반 문서 분석</span>
+            <span>{new Date().toLocaleDateString('ko-KR')}</span>
+          </div>
+        </div>
+      )}
 
       {/* Hidden print div — captured by html2canvas for PDF export */}
       <div
