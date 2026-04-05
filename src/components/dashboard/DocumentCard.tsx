@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { FileText, FileType, Clock, Trash2, Loader2 } from 'lucide-react'
+import { FileText, FileType, Image, Clock, Trash2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Document, DocumentStatus } from '@/types'
 import { useRouter } from 'next/navigation'
@@ -69,9 +69,15 @@ export function DocumentCard({ document: doc, onDelete }: DocumentCardProps) {
 
       <CardHeader className="pb-2">
         <div className="flex items-start gap-3">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${doc.file_type === 'pdf' ? 'bg-red-100 dark:bg-red-900/40' : 'bg-blue-100 dark:bg-blue-900/40'}`}>
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+            doc.file_type === 'pdf' ? 'bg-red-100 dark:bg-red-900/40'
+            : doc.file_type === 'image' ? 'bg-green-100 dark:bg-green-900/40'
+            : 'bg-blue-100 dark:bg-blue-900/40'
+          }`}>
             {doc.file_type === 'pdf'
               ? <FileText className="h-5 w-5 text-red-600 dark:text-red-400" />
+              : doc.file_type === 'image'
+              ? <Image className="h-5 w-5 text-green-600 dark:text-green-400" />
               : <FileType className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             }
           </div>

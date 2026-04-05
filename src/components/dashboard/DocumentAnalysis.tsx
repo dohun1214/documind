@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { UpgradeModal } from '@/components/dashboard/UpgradeModal'
 import {
-  FileText, FileType, ArrowLeft, Calendar,
+  FileText, FileType, Image, ArrowLeft, Calendar,
   Hash, MessageSquare, Lightbulb, AlignLeft,
   Send, BrainCircuit, Loader2, Trash2, CheckCircle2, Circle,
   Languages, Copy, Check, Download, Zap, Info,
@@ -441,9 +441,15 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${doc.file_type === 'pdf' ? 'bg-red-100 dark:bg-red-900/40' : 'bg-blue-100 dark:bg-blue-900/40'}`}>
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+            doc.file_type === 'pdf' ? 'bg-red-100 dark:bg-red-900/40'
+            : doc.file_type === 'image' ? 'bg-green-100 dark:bg-green-900/40'
+            : 'bg-blue-100 dark:bg-blue-900/40'
+          }`}>
             {doc.file_type === 'pdf'
               ? <FileText className="h-4 w-4 text-red-600 dark:text-red-400" />
+              : doc.file_type === 'image'
+              ? <Image className="h-4 w-4 text-green-600 dark:text-green-400" />
               : <FileType className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
           </div>
           <h1 className="font-bold text-lg truncate">{doc.title}</h1>
@@ -472,11 +478,23 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
         {/* Left: document info */}
         <Card className="w-72 shrink-0 overflow-y-auto flex flex-col">
           <CardHeader className="pb-3">
-            <div className={`flex h-14 w-14 items-center justify-center rounded-xl mx-auto mb-3 ${doc.file_type === 'pdf' ? 'bg-red-100 dark:bg-red-900/40' : 'bg-blue-100 dark:bg-blue-900/40'}`}>
-              {doc.file_type === 'pdf'
-                ? <FileText className="h-7 w-7 text-red-600 dark:text-red-400" />
-                : <FileType className="h-7 w-7 text-blue-600 dark:text-blue-400" />}
-            </div>
+            {doc.file_type === 'image' ? (
+              <div className="w-full mb-3 overflow-hidden rounded-xl border border-border/40 bg-muted/30">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/api/documents/${doc.id}/preview`}
+                  alt={doc.title}
+                  className="w-full object-contain max-h-48"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                />
+              </div>
+            ) : (
+              <div className={`flex h-14 w-14 items-center justify-center rounded-xl mx-auto mb-3 ${doc.file_type === 'pdf' ? 'bg-red-100 dark:bg-red-900/40' : 'bg-blue-100 dark:bg-blue-900/40'}`}>
+                {doc.file_type === 'pdf'
+                  ? <FileText className="h-7 w-7 text-red-600 dark:text-red-400" />
+                  : <FileType className="h-7 w-7 text-blue-600 dark:text-blue-400" />}
+              </div>
+            )}
             <CardTitle className="text-sm font-semibold text-center truncate" title={doc.title}>{doc.title}</CardTitle>
             <p className="text-xs text-muted-foreground text-center uppercase">{doc.file_type}</p>
           </CardHeader>
@@ -507,6 +525,16 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
               <span className="text-muted-foreground">업로드</span>
               <span className="ml-auto font-medium text-xs">{formatDate(doc.created_at)}</span>
             </div>
+
+            {doc.file_type === 'pdf' && (
+              <>
+                <Separator />
+                <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+                  <Info className="h-3 w-3 shrink-0 mt-0.5 text-amber-500" />
+                  PDF 내 이미지 분석은 이미지를 별도 업로드해주세요
+                </p>
+              </>
+            )}
 
             <Separator />
 

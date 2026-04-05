@@ -50,7 +50,7 @@ export type Plans = {
 }
 
 export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'error'
-export type FileType = 'pdf' | 'docx'
+export type FileType = 'pdf' | 'docx' | 'image'
 
 export interface Document {
   id: string

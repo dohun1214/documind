@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import type { DocumentBlockParam } from '@anthropic-ai/sdk/resources/messages/messages.js'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const MODEL = 'claude-sonnet-4-20250514'
@@ -213,4 +214,63 @@ ${truncate(fullText)}`,
       },
     ],
   })
+}
+
+// ─── Vision API ──────────────────────────────────────────────────────────────
+
+/**
+ * Analyze a single image with Claude Vision.
+ * Returns a detailed description and any extracted text.
+ */
+export async function analyzeImageWithVision(
+  imageBase64: string,
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp'
+): Promise<string> {
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 4096,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'image',
+          source: { type: 'base64', media_type: mediaType, data: imageBase64 },
+        },
+        {
+          type: 'text',
+          text: '이 이미지의 내용을 상세히 분석하고 설명해줘. 텍스트가 있으면 모두 정확하게 추출해줘. 표가 있으면 마크다운 표 형식으로 정리해줘. 그래프나 차트가 있으면 수치와 내용을 설명해줘.',
+        },
+      ],
+    }],
+  })
+  return message.content[0].type === 'text' ? message.content[0].text : ''
+}
+
+/**
+ * OCR an image-based (scanned) PDF using Claude's native document understanding.
+ * Uses the document content block which accepts PDF binary as base64.
+ */
+export async function analyzePdfWithVision(pdfBase64: string): Promise<string> {
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 4096,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: pdfBase64,
+          },
+        } as DocumentBlockParam,
+        {
+          type: 'text',
+          text: '이 PDF 문서의 모든 텍스트를 정확하게 추출해줘. 표가 있으면 마크다운 표 형식으로, 목록은 리스트 형식으로 구조를 유지하면서 모든 내용을 추출해줘.',
+        },
+      ],
+    }],
+  })
+  return message.content[0].type === 'text' ? message.content[0].text : ''
 }

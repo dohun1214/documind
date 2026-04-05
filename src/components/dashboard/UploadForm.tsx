@@ -11,6 +11,11 @@ import { cn } from '@/lib/utils'
 
 const MAX_SIZE_MB = 20
 
+const FILE_TYPE_NOTES: Record<string, string> = {
+  pdf:  'PDF 내 이미지 분석은 이미지를 별도 업로드해주세요',
+  docx: '문서 내 이미지도 AI가 분석합니다',
+}
+
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -26,8 +31,9 @@ export function UploadForm() {
 
   function pickFile(f: File) {
     const ext = f.name.split('.').pop()?.toLowerCase()
-    if (ext !== 'pdf' && ext !== 'docx') {
-      toast.error('PDF 또는 DOCX 파일만 지원합니다.')
+    const allowed = ['pdf', 'docx', 'png', 'jpg', 'jpeg', 'webp']
+    if (!ext || !allowed.includes(ext)) {
+      toast.error('PDF, DOCX, PNG, JPG, WEBP 파일만 지원합니다.')
       return
     }
     if (f.size > MAX_SIZE_MB * 1024 * 1024) {
@@ -96,7 +102,7 @@ export function UploadForm() {
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.docx"
+            accept=".pdf,.docx,.png,.jpg,.jpeg,.webp"
             className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f) }}
           />
@@ -110,6 +116,11 @@ export function UploadForm() {
                 <p className="font-semibold">{file.name}</p>
                 <p className="text-sm text-muted-foreground mt-1">{formatBytes(file.size)}</p>
               </div>
+              {FILE_TYPE_NOTES[file.name.split('.').pop()?.toLowerCase() ?? ''] && (
+                <p className="text-xs text-indigo-600 dark:text-indigo-400 text-center max-w-xs">
+                  {FILE_TYPE_NOTES[file.name.split('.').pop()?.toLowerCase() ?? '']}
+                </p>
+              )}
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setFile(null) }}
@@ -131,7 +142,7 @@ export function UploadForm() {
                   {dragging ? '여기에 파일을 놓으세요' : '파일을 드래그하거나 클릭하여 선택'}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  PDF, DOCX · 최대 {MAX_SIZE_MB}MB
+                  PDF, DOCX, 이미지(PNG, JPG, WEBP) · 최대 {MAX_SIZE_MB}MB
                 </p>
               </div>
             </div>
