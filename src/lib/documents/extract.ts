@@ -3,6 +3,12 @@
  * These run server-side only.
  */
 
+import { createRequire } from 'module'
+
+// createRequire binds CJS require to this ESM module — required for Turbopack
+// to correctly resolve CJS packages marked in serverExternalPackages.
+const _require = createRequire(import.meta.url)
+
 export interface ExtractResult {
   text: string
   pageCount: number
@@ -33,9 +39,11 @@ export function splitIntoChunks(text: string, chunkSize = 2000): string[] {
 type PdfParseFn = (buf: Buffer) => Promise<{ text: string; numpages: number }>
 
 export async function extractPdf(buffer: Buffer): Promise<ExtractResult> {
-  // pdf-parse@1.x exports a function directly (CJS); use require for reliability with Turbopack
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require('pdf-parse') as PdfParseFn
+  // Use createRequire-bound require to correctly load CJS-only pdf-parse
+  // under Turbopack's ESM server runtime (next.js 16+).
+  // pdf-parse/lib/pdf-parse.js bypasses the problematic index.js debug-mode
+  // check that fires when module.parent is undefined in newer Node.js.
+  const pdfParse = _require('pdf-parse/lib/pdf-parse.js') as PdfParseFn
   const data = await pdfParse(buffer)
   return {
     text: data.text,
