@@ -12,7 +12,6 @@ import { cn } from '@/lib/utils'
 const MAX_SIZE_MB = 20
 
 const FILE_TYPE_NOTES: Record<string, string> = {
-  pdf:  'PDF 내 이미지 분석은 이미지를 별도 업로드해주세요',
   docx: '문서 내 이미지도 AI가 분석합니다',
 }
 

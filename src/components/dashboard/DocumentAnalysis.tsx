@@ -529,16 +529,6 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
               <span className="ml-auto font-medium text-xs">{formatDate(doc.created_at)}</span>
             </div>
 
-            {doc.file_type === 'pdf' && (
-              <>
-                <Separator />
-                <p className="text-xs text-muted-foreground flex items-start gap-1.5">
-                  <Info className="h-3 w-3 shrink-0 mt-0.5 text-amber-500" />
-                  PDF 내 이미지 분석은 이미지를 별도 업로드해주세요
-                </p>
-              </>
-            )}
-
             <Separator />
 
             <div className="space-y-2">
