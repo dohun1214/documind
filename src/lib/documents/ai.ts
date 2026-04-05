@@ -285,6 +285,107 @@ export function streamSummaryWithPdfVision(pdfBase64: string, style: SummaryStyl
  * OCR an image-based (scanned) PDF using Claude's native document understanding.
  * Uses the document content block which accepts PDF binary as base64.
  */
+// ─── Quiz Generation ─────────────────────────────────────────────────────────
+
+export type QuizDifficulty = 'easy' | 'medium' | 'hard'
+export type QuizType = 'multiple_choice' | 'true_false' | 'short_answer' | 'mixed'
+
+export interface QuizQuestion {
+  id: number
+  type: 'multiple_choice' | 'true_false' | 'short_answer'
+  question: string
+  options?: string[]
+  answer: string
+  explanation: string
+}
+
+const DIFFICULTY_LABELS: Record<QuizDifficulty, string> = {
+  easy: '쉬움 (문서에 명시적으로 나온 내용)',
+  medium: '보통 (내용 이해력 필요)',
+  hard: '어려움 (추론 및 응용 필요)',
+}
+
+const TYPE_LABELS: Record<QuizType, string> = {
+  multiple_choice: '객관식 (4지선다)만',
+  true_false: 'O/X (참/거짓)만',
+  short_answer: '단답형만',
+  mixed: '객관식, O/X, 단답형 골고루 혼합',
+}
+
+export async function generateQuiz(
+  fullText: string,
+  count: number,
+  difficulty: QuizDifficulty,
+  type: QuizType
+): Promise<QuizQuestion[]> {
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 4096,
+    system: SYSTEM_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `이 문서 내용을 바탕으로 퀴즈를 생성해줘.
+
+설정:
+- 문제 수: ${count}개
+- 난이도: ${DIFFICULTY_LABELS[difficulty]}
+- 문제 유형: ${TYPE_LABELS[type]}
+
+반드시 아래 JSON 형식으로만 응답해줘:
+{
+  "questions": [
+    {
+      "id": 1,
+      "type": "multiple_choice",
+      "question": "질문 내용",
+      "options": ["보기1", "보기2", "보기3", "보기4"],
+      "answer": "정답 보기",
+      "explanation": "정답 해설"
+    },
+    {
+      "id": 2,
+      "type": "true_false",
+      "question": "참/거짓 질문",
+      "answer": "O",
+      "explanation": "해설"
+    },
+    {
+      "id": 3,
+      "type": "short_answer",
+      "question": "단답형 질문",
+      "answer": "정답",
+      "explanation": "해설"
+    }
+  ]
+}
+
+주의사항:
+- 문서에 실제로 있는 내용만 기반으로 출제
+- 난이도에 맞게 조절
+- 해설은 문서의 어느 부분에서 나온 내용인지 언급
+- true_false 타입의 answer는 반드시 "O" 또는 "X" 중 하나
+
+문서:
+${truncate(fullText, 60000)}`,
+    }],
+  })
+
+  const text = message.content[0].type === 'text' ? message.content[0].text : '{}'
+  try {
+    const match = text.match(/\{[\s\S]*\}/)
+    const parsed = match ? JSON.parse(match[0]) : {}
+    const questions: unknown[] = Array.isArray(parsed.questions) ? parsed.questions : []
+    return questions.filter((q): q is QuizQuestion =>
+      typeof q === 'object' && q !== null &&
+      'id' in q && 'type' in q && 'question' in q && 'answer' in q && 'explanation' in q
+    )
+  } catch {
+    return []
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function analyzePdfWithVision(pdfBase64: string): Promise<string> {
   const message = await client.messages.create({
     model: MODEL,

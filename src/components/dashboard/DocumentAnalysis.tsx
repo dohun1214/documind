@@ -13,15 +13,16 @@ import {
   FileText, FileType, Image, ArrowLeft, Calendar,
   Hash, MessageSquare, Lightbulb, AlignLeft,
   Send, BrainCircuit, Loader2, Trash2, CheckCircle2, Circle,
-  Languages, Copy, Check, Download, Zap, Info,
+  Languages, Copy, Check, Download, Zap, Info, BookOpenCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { Document, Conversation } from '@/types'
 import { buttonVariants } from '@/lib/button-variants'
 import { MarkdownContent } from '@/components/shared/MarkdownContent'
+import { QuizTab } from '@/components/dashboard/QuizTab'
 
-type Tab = 'summary' | 'keypoints' | 'qa' | 'translate'
+type Tab = 'summary' | 'keypoints' | 'qa' | 'translate' | 'quiz'
 type TranslateDir = 'ko-en' | 'en-ko'
 type SummaryStyle = 'detailed' | 'brief' | 'oneliner' | 'simple' | 'expert'
 
@@ -418,8 +419,11 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   }
 
   function handleTabClick(id: Tab) {
-    if (id === 'translate' && !isPro) {
-      setUpgradeHint('번역 기능은 Pro 전용입니다. 업그레이드하면 문서를 한↔영으로 번역할 수 있습니다.')
+    if ((id === 'translate' || id === 'quiz') && !isPro) {
+      const hint = id === 'translate'
+        ? '번역 기능은 Pro 전용입니다. 업그레이드하면 문서를 한↔영으로 번역할 수 있습니다.'
+        : '퀴즈 기능은 Pro 전용입니다. 업그레이드하면 문서 내용으로 AI 퀴즈를 생성할 수 있습니다.'
+      setUpgradeHint(hint)
       setUpgradeOpen(true)
       return
     }
@@ -431,6 +435,7 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
     { id: 'keypoints' as Tab, label: '핵심 포인트', icon: Lightbulb },
     { id: 'qa' as Tab, label: '질의응답', icon: MessageSquare },
     { id: 'translate' as Tab, label: '번역', icon: Languages, proOnly: true },
+    { id: 'quiz' as Tab, label: '퀴즈', icon: BookOpenCheck, proOnly: true },
   ]
 
   return (
@@ -934,6 +939,11 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
                   )}
                 </div>
               </div>
+            )}
+
+            {/* Quiz tab */}
+            {tab === 'quiz' && (
+              <QuizTab documentId={doc.id} disabled={docStatus !== 'ready'} />
             )}
           </div>
         </Card>
