@@ -247,6 +247,37 @@ export async function analyzeImageWithVision(
 }
 
 /**
+ * Stream a summary of a PDF document using Claude's native PDF understanding.
+ * Claude receives the full PDF binary (text + images + charts) and generates
+ * a summary in the requested style. Pro-only; max 30 pages recommended.
+ */
+export function streamSummaryWithPdfVision(pdfBase64: string, style: SummaryStyle) {
+  const stylePrompt = STYLE_PROMPTS[style]
+  return client.messages.stream({
+    model: MODEL,
+    max_tokens: style === 'oneliner' ? 256 : 4096,
+    system: SYSTEM_PROMPT,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: pdfBase64,
+          },
+        } as DocumentBlockParam,
+        {
+          type: 'text',
+          text: `이 PDF 문서를 한국어로 분석해줘. ${stylePrompt}\n텍스트뿐 아니라 이미지, 차트, 그래프, 표 등 모든 시각적 요소도 상세히 분석해줘. 이미지에 텍스트가 있으면 추출해줘. 시각적 요소 분석은 "## 이미지/시각 자료 분석" 섹션으로 별도 표시해줘.`,
+        },
+      ],
+    }],
+  })
+}
+
+/**
  * OCR an image-based (scanned) PDF using Claude's native document understanding.
  * Uses the document content block which accepts PDF binary as base64.
  */

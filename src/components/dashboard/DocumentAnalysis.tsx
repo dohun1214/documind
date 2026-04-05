@@ -84,6 +84,9 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   // Summary style
   const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>('detailed')
 
+  // Image-inclusive PDF Vision analysis (Pro + PDF only)
+  const [includeImages, setIncludeImages] = useState(false)
+
   // Recommended / suggested questions from doc
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>(
     doc.recommended_questions ?? []
@@ -159,14 +162,14 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, docStatus])
 
-  async function loadSummary(style: SummaryStyle = summaryStyle) {
+  async function loadSummary(style: SummaryStyle = summaryStyle, withImages = includeImages) {
     setSummaryLoading(true)
     setSummary('')
     try {
       const res = await fetch(`/api/documents/${doc.id}/summarize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ style }),
+        body: JSON.stringify({ style, includeImages: withImages }),
       })
       if (!res.ok) {
         const msg = await res.text()
@@ -604,8 +607,8 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
             {/* Summary tab */}
             {tab === 'summary' && (
               <div className="flex-1 overflow-hidden flex flex-col">
-                {/* Style selector */}
-                <div className="border-b px-5 py-2.5 flex gap-1.5 flex-wrap shrink-0">
+                {/* Style selector + image toggle */}
+                <div className="border-b px-5 py-2.5 flex gap-1.5 flex-wrap items-center shrink-0">
                   {STYLE_OPTIONS.map(({ value, label }) => (
                     <button
                       key={value}
@@ -624,7 +627,44 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
                       {label}
                     </button>
                   ))}
+                  {doc.file_type === 'pdf' && (
+                    <button
+                      onClick={() => {
+                        if (!isPro) {
+                          setUpgradeHint('이미지 포함 분석은 Pro 전용 기능입니다. PDF 내 이미지, 차트, 그래프까지 AI가 분석합니다.')
+                          setUpgradeOpen(true)
+                          return
+                        }
+                        const next = !includeImages
+                        setIncludeImages(next)
+                        loadSummary(summaryStyle, next)
+                      }}
+                      disabled={summaryLoading || docStatus !== 'ready'}
+                      className={cn(
+                        'ml-auto flex items-center gap-1 px-3 py-1 text-xs rounded-full border transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+                        includeImages && isPro
+                          ? 'bg-green-600 text-white border-green-600'
+                          : 'border-border text-muted-foreground hover:border-indigo-300 hover:text-foreground'
+                      )}
+                    >
+                      <Image className="h-3 w-3" />
+                      이미지 포함 분석
+                      {!isPro && <Zap className="h-3 w-3 text-indigo-400 ml-0.5" />}
+                    </button>
+                  )}
                 </div>
+                {/* PDF image hint */}
+                {doc.file_type === 'pdf' && (
+                  <div className="border-b px-5 py-2 flex items-start gap-1.5 text-xs text-muted-foreground bg-muted/20 shrink-0">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-500" />
+                    <span>
+                      이 문서에는 이미지/차트가 포함되어 있을 수 있습니다.
+                      {isPro
+                        ? ' 이미지 포함 분석을 켜면 더 정확한 결과를 얻을 수 있습니다.'
+                        : ' Pro로 업그레이드하면 이미지까지 분석합니다.'}
+                    </span>
+                  </div>
+                )}
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-5">
                   {(summaryLoading && !summary) || (docStatus === 'processing' && !summary) ? (
