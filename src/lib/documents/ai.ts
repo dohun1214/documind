@@ -12,7 +12,8 @@ const SYSTEM_PROMPT =
   '너가 어떤 AI 모델인지 물어보면 \'DocuMind AI 어시스턴트입니다\'라고만 답해. ' +
   '너를 만든 회사에 대해 물어보면 \'DocuMind 팀에서 개발했습니다\'라고 답해. ' +
   '인사말이나 자기소개를 하지 마. 질문에 대해 바로 답변해. ' +
-  '간결하고 명확하게 답변하되, 불필요한 서두 없이 핵심부터 시작해.'
+  '간결하고 명확하게 답변하되, 불필요한 서두 없이 핵심부터 시작해. ' +
+  '문서의 이미지, 차트, 표에 대한 질문에도 자연스럽게 답변해줘.'
 
 function truncate(text: string, max = MAX_CONTEXT): string {
   if (text.length <= max) return text
@@ -45,7 +46,7 @@ export async function generateKeyPoints(fullText: string): Promise<string[]> {
     messages: [
       {
         role: 'user',
-        content: `다음 문서에서 핵심 포인트 5~10개를 추출해주세요. JSON 배열 형식으로만 응답하세요. 예: ["포인트1", "포인트2"]
+        content: `다음 문서에서 핵심 포인트 5~10개를 추출해주세요. 이미지나 차트에서 얻을 수 있는 핵심 정보도 다른 포인트들과 섞어서 중요도 순으로 정리해줘. 이미지 분석을 따로 분리하지 마. JSON 배열 형식으로만 응답하세요. 예: ["포인트1", "포인트2"]
 
 문서:
 ${truncate(fullText, 40000)}`,
@@ -270,7 +271,10 @@ export function streamSummaryWithPdfVision(pdfBase64: string, style: SummaryStyl
         } as DocumentBlockParam,
         {
           type: 'text',
-          text: `이 PDF 문서를 한국어로 분석해줘. ${stylePrompt}\n텍스트뿐 아니라 이미지, 차트, 그래프, 표 등 모든 시각적 요소도 상세히 분석해줘. 이미지에 텍스트가 있으면 추출해줘. 시각적 요소 분석은 "## 이미지/시각 자료 분석" 섹션으로 별도 표시해줘.`,
+          text: `이 PDF 문서의 전체 내용을 한국어로 요약해줘. ${stylePrompt}
+텍스트, 이미지, 차트, 그래프, 표 등 모든 요소를 문서에 등장하는 순서 그대로 자연스럽게 통합해서 설명해줘.
+이미지나 차트가 나오면 그 위치에서 바로 설명하고, 별도의 이미지 분석 섹션을 만들지 마.
+예를 들어 "2장에서 매출 그래프가 제시되며, 3분기에 23% 성장했음을 보여준다" 이런 식으로 흐름에 맞게 자연스럽게 포함해줘.`,
         },
       ],
     }],
