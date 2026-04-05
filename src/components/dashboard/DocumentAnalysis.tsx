@@ -23,6 +23,15 @@ import { MarkdownContent } from '@/components/shared/MarkdownContent'
 
 type Tab = 'summary' | 'keypoints' | 'qa' | 'translate'
 type TranslateDir = 'ko-en' | 'en-ko'
+type SummaryStyle = 'detailed' | 'brief' | 'oneliner' | 'simple' | 'expert'
+
+const STYLE_OPTIONS: { value: SummaryStyle; label: string }[] = [
+  { value: 'detailed', label: '상세 요약' },
+  { value: 'brief',    label: '간단 요약' },
+  { value: 'oneliner', label: '한 줄 요약' },
+  { value: 'simple',   label: '쉬운 설명' },
+  { value: 'expert',   label: '전문가용' },
+]
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -71,6 +80,14 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   )
   const [question, setQuestion] = useState('')
   const [asking, setAsking] = useState(false)
+
+  // Summary style
+  const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>('detailed')
+
+  // Recommended / suggested questions from doc
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>(
+    doc.recommended_questions ?? []
+  )
 
   // Translation state
   const [translateDir, setTranslateDir] = useState<TranslateDir>('ko-en')
@@ -126,10 +143,10 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
     return () => clearInterval(interval)
   }, [docStatus, doc.id])
 
-  // Auto-load summary
+  // Auto-load summary (always 'detailed' on tab open)
   useEffect(() => {
     if (tab === 'summary' && !summary && !summaryLoading && docStatus === 'ready') {
-      loadSummary()
+      loadSummary('detailed')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, docStatus])
@@ -142,11 +159,15 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, docStatus])
 
-  async function loadSummary() {
+  async function loadSummary(style: SummaryStyle = summaryStyle) {
     setSummaryLoading(true)
     setSummary('')
     try {
-      const res = await fetch(`/api/documents/${doc.id}/summarize`, { method: 'POST' })
+      const res = await fetch(`/api/documents/${doc.id}/summarize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ style }),
+      })
       if (!res.ok) {
         const msg = await res.text()
         throw new Error(msg || '요약 생성에 실패했습니다.')
@@ -158,6 +179,13 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
         const { done, value } = await reader.read()
         if (done) break
         setSummary(prev => prev + decoder.decode(value))
+      }
+      // After summary loads, refresh recommended questions from DB if not yet available
+      if (suggestedQuestions.length === 0) {
+        fetch(`/api/documents/${doc.id}`)
+          .then(r => r.json())
+          .then(d => { if (d.recommended_questions?.length) setSuggestedQuestions(d.recommended_questions) })
+          .catch(() => {})
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '요약 생성에 실패했습니다.')
@@ -189,6 +217,13 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   async function handleAsk(overrideQuestion?: string) {
     const q = (overrideQuestion ?? question).trim()
     if (!q || asking) return
+
+    // Capture history before adding new messages (max 10 Q&A = 20 msgs)
+    const historySnapshot = messages
+      .filter(m => !m.streaming && m.content)
+      .slice(-20)
+      .map(({ role, content }) => ({ role, content }))
+
     setQuestion('')
     setAsking(true)
 
@@ -199,7 +234,7 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
       const res = await fetch(`/api/documents/${doc.id}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, history: historySnapshot }),
       })
       if (!res.ok || !res.body) {
         const text = await res.text()
@@ -540,29 +575,53 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
           <div className="flex-1 overflow-hidden flex flex-col">
             {/* Summary tab */}
             {tab === 'summary' && (
-              <div className="flex-1 overflow-y-auto p-5">
-                {(summaryLoading && !summary) || (docStatus === 'processing' && !summary) ? (
-                  <div className="flex flex-col items-center justify-center h-32 gap-3 text-muted-foreground">
-                    <LoadingSpinner className="h-6 w-6 text-indigo-500" />
-                    <p className="text-sm">
-                      {docStatus === 'processing' ? 'AI가 문서를 분석 중입니다...' : 'AI가 문서를 요약하고 있습니다...'}
-                    </p>
-                  </div>
-                ) : summary ? (
-                  <div className="text-sm">
-                    <MarkdownContent>{summary}</MarkdownContent>
-                    {summaryLoading && (
-                      <span className="inline-block h-4 w-0.5 bg-indigo-500 animate-[pulse_0.7s_ease-in-out_infinite] ml-0.5 align-middle" />
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-32 gap-3">
-                    <BrainCircuit className="h-8 w-8 text-muted-foreground/40" />
-                    <Button size="sm" onClick={loadSummary} className="bg-indigo-600 hover:bg-indigo-700">
-                      요약 생성하기
-                    </Button>
-                  </div>
-                )}
+              <div className="flex-1 overflow-hidden flex flex-col">
+                {/* Style selector */}
+                <div className="border-b px-5 py-2.5 flex gap-1.5 flex-wrap shrink-0">
+                  {STYLE_OPTIONS.map(({ value, label }) => (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        setSummaryStyle(value)
+                        loadSummary(value)
+                      }}
+                      disabled={summaryLoading || docStatus !== 'ready'}
+                      className={cn(
+                        'px-3 py-1 text-xs rounded-full border transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+                        summaryStyle === value
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'border-border text-muted-foreground hover:border-indigo-300 hover:text-foreground'
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-5">
+                  {(summaryLoading && !summary) || (docStatus === 'processing' && !summary) ? (
+                    <div className="flex flex-col items-center justify-center h-32 gap-3 text-muted-foreground">
+                      <LoadingSpinner className="h-6 w-6 text-indigo-500" />
+                      <p className="text-sm">
+                        {docStatus === 'processing' ? 'AI가 문서를 분석 중입니다...' : 'AI가 문서를 요약하고 있습니다...'}
+                      </p>
+                    </div>
+                  ) : summary ? (
+                    <div className="text-sm">
+                      <MarkdownContent>{summary}</MarkdownContent>
+                      {summaryLoading && (
+                        <span className="inline-block h-4 w-0.5 bg-indigo-500 animate-[pulse_0.7s_ease-in-out_infinite] ml-0.5 align-middle" />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-32 gap-3">
+                      <BrainCircuit className="h-8 w-8 text-muted-foreground/40" />
+                      <Button size="sm" onClick={() => loadSummary(summaryStyle)} className="bg-indigo-600 hover:bg-indigo-700">
+                        요약 생성하기
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -618,7 +677,7 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
                       </div>
                       {docStatus === 'ready' && (
                         <div className="flex flex-col gap-2 w-full max-w-sm">
-                          {SUGGESTED_QUESTIONS.map(q => (
+                          {(suggestedQuestions.length > 0 ? suggestedQuestions : SUGGESTED_QUESTIONS).map(q => (
                             <button
                               key={q}
                               onClick={() => handleAsk(q)}
@@ -632,43 +691,58 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
                     </div>
                   )}
                   {messages.map((msg, i) => (
-                    <div
-                      key={i}
-                      className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}
-                    >
-                      {msg.role === 'assistant' && (
-                        <div className="h-7 w-7 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
-                          <BrainCircuit className="h-3.5 w-3.5 text-white" />
-                        </div>
-                      )}
-                      <div
-                        className={cn(
-                          'rounded-2xl px-4 py-2.5 text-sm max-w-[80%]',
-                          msg.role === 'user'
-                            ? 'bg-indigo-600 text-white rounded-tr-sm'
-                            : 'bg-muted rounded-tl-sm'
-                        )}
-                      >
-                        {msg.role === 'user' ? (
-                          <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                        ) : (
-                          <div className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-                            {msg.content && (
-                              <MarkdownContent variant="bubble">{msg.content}</MarkdownContent>
-                            )}
-                            {msg.streaming && msg.content && (
-                              <span className="inline-block h-4 w-0.5 bg-current animate-pulse ml-0.5 align-middle opacity-70" />
-                            )}
-                            {msg.streaming && !msg.content && (
-                              <span className="inline-flex gap-1 items-center py-1">
-                                <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
-                                <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
-                                <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
-                              </span>
-                            )}
+                    <div key={i}>
+                      <div className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                        {msg.role === 'assistant' && (
+                          <div className="h-7 w-7 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
+                            <BrainCircuit className="h-3.5 w-3.5 text-white" />
                           </div>
                         )}
+                        <div
+                          className={cn(
+                            'rounded-2xl px-4 py-2.5 text-sm max-w-[80%]',
+                            msg.role === 'user'
+                              ? 'bg-indigo-600 text-white rounded-tr-sm'
+                              : 'bg-muted rounded-tl-sm'
+                          )}
+                        >
+                          {msg.role === 'user' ? (
+                            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                          ) : (
+                            <div className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                              {msg.content && (
+                                <MarkdownContent variant="bubble">{msg.content}</MarkdownContent>
+                              )}
+                              {msg.streaming && msg.content && (
+                                <span className="inline-block h-4 w-0.5 bg-current animate-pulse ml-0.5 align-middle opacity-70" />
+                              )}
+                              {msg.streaming && !msg.content && (
+                                <span className="inline-flex gap-1 items-center py-1">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                      {!msg.streaming && msg.role === 'assistant' && msg.content && (
+                        <div className="flex items-center gap-1 mt-1 pl-9">
+                          <button
+                            className="text-[11px] px-2 py-0.5 rounded border border-border/50 text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+                            onClick={() => handleAsk('이전 답변을 더 자세히 설명해줘')}
+                          >더 자세히</button>
+                          <button
+                            className="text-[11px] px-2 py-0.5 rounded border border-border/50 text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+                            onClick={() => handleAsk('이전 답변을 더 쉽게 설명해줘')}
+                          >더 쉽게</button>
+                          <button
+                            className="text-[11px] px-2 py-0.5 rounded border border-border/50 text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+                            onClick={() => { navigator.clipboard.writeText(msg.content); toast.success('복사됨') }}
+                          >복사</button>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <div ref={chatEndRef} />

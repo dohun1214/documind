@@ -63,6 +63,7 @@ export interface Document {
   char_count: number | null
   summary: string | null
   key_points: string[] | null
+  recommended_questions: string[] | null
   status: DocumentStatus
   created_at: string
   updated_at: string

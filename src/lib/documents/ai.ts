@@ -60,25 +60,75 @@ ${truncate(fullText, 40000)}`,
   }
 }
 
-export function streamAnswer(question: string, contextChunks: string[]) {
+export type SummaryStyle = 'detailed' | 'brief' | 'oneliner' | 'simple' | 'expert'
+
+const STYLE_PROMPTS: Record<SummaryStyle, string> = {
+  detailed: '구조화된 형식(## 제목, 단락 구분)으로 핵심 내용을 중심으로 요약해줘.',
+  brief: '3~5문장으로 핵심만 간단히 요약해줘. 불필요한 세부 사항은 생략해.',
+  oneliner: '이 문서의 핵심을 단 한 문장으로 요약해줘.',
+  simple: '초등학생도 이해할 수 있는 쉬운 말로 설명해줘. 어려운 용어는 쉬운 표현으로 바꿔.',
+  expert: '전문 용어를 유지하면서 주요 논점, 방법론, 한계점을 포함한 비판적 분석을 제공해줘.',
+}
+
+export function streamSummaryWithStyle(fullText: string, style: SummaryStyle) {
+  return client.messages.stream({
+    model: MODEL,
+    max_tokens: style === 'oneliner' ? 256 : 2048,
+    system: SYSTEM_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `다음 문서를 한국어로 요약해줘. ${STYLE_PROMPTS[style]}\n\n문서:\n${truncate(fullText)}`,
+    }],
+  })
+}
+
+type HistoryMsg = { role: 'user' | 'assistant'; content: string }
+
+export function streamAnswer(
+  question: string,
+  contextChunks: string[],
+  history: HistoryMsg[] = []
+) {
   const context = contextChunks.join('\n\n---\n\n')
+  // Inject document context into system prompt so message history stays clean
+  const sysWithCtx =
+    SYSTEM_PROMPT +
+    `\n\n[문서 참고 내용 — 이 내용을 기반으로 모든 질문에 답변하세요]\n\n${truncate(context, 30000)}`
+
   return client.messages.stream({
     model: MODEL,
     max_tokens: 2048,
-    system: SYSTEM_PROMPT,
+    system: sysWithCtx,
     messages: [
-      {
-        role: 'user',
-        content: `다음은 문서의 관련 내용입니다:
-
-${truncate(context, 40000)}
-
----
-위 내용을 바탕으로 다음 질문에 한국어로 답변해주세요:
-${question}`,
-      },
+      ...history,
+      { role: 'user' as const, content: question },
     ],
   })
+}
+
+export async function generateRecommendedQuestions(fullText: string): Promise<string[]> {
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 512,
+    system: SYSTEM_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `다음 문서를 읽고, 독자가 이 문서에 대해 물어볼 만한 흥미롭고 유익한 질문 5개를 생성해줘.
+질문은 문서 내용을 깊이 이해하는 데 도움이 되어야 해.
+JSON 배열 형식으로만 응답해. 예: ["질문1", "질문2", "질문3", "질문4", "질문5"]
+
+문서:
+${truncate(fullText, 40000)}`,
+    }],
+  })
+  const text = message.content[0].type === 'text' ? message.content[0].text : '[]'
+  try {
+    const match = text.match(/\[[\s\S]*\]/)
+    const parsed: unknown[] = match ? JSON.parse(match[0]) : []
+    return parsed.filter((q): q is string => typeof q === 'string')
+  } catch {
+    return []
+  }
 }
 
 export function streamTranslation(fullText: string, direction: 'ko-en' | 'en-ko') {

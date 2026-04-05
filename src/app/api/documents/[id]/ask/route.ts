@@ -13,7 +13,10 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response('Unauthorized', { status: 401 })
 
-  const { question } = await request.json()
+  const { question, history = [] } = await request.json() as {
+    question: string
+    history?: { role: 'user' | 'assistant'; content: string }[]
+  }
   if (!question?.trim()) return new Response('Question is required', { status: 400 })
 
   // Verify document ownership
@@ -75,8 +78,8 @@ export async function POST(
     ? topChunks.map(c => c.content)
     : allChunks.slice(0, 5)
 
-  // Stream from Claude
-  const claudeStream = streamAnswer(question, contextChunks)
+  // Stream from Claude — include last 20 messages (10 Q&A pairs) for context continuity
+  const claudeStream = streamAnswer(question, contextChunks, history.slice(-20))
   let fullAnswer = ''
 
   const readableStream = new ReadableStream({

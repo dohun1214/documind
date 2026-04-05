@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { extractPdf, extractDocx, splitIntoChunks } from '@/lib/documents/extract'
-import { generateSummary, generateKeyPoints } from '@/lib/documents/ai'
+import { generateSummary, generateKeyPoints, generateRecommendedQuestions } from '@/lib/documents/ai'
 
 const FREE_DAILY_LIMIT = 3
 const FREE_PAGE_LIMIT = 10
@@ -129,13 +129,20 @@ export async function POST(request: NextRequest) {
   // We respond immediately and process in background
   ;(async () => {
     try {
-      const [summary, keyPoints] = await Promise.all([
+      const [summary, keyPoints, recommendedQuestions] = await Promise.all([
         generateSummary(extracted.text),
         generateKeyPoints(extracted.text),
+        generateRecommendedQuestions(extracted.text),
       ])
       await serviceSupabase
         .from('documents')
-        .update({ summary, key_points: keyPoints, status: 'ready', updated_at: new Date().toISOString() })
+        .update({
+          summary,
+          key_points: keyPoints,
+          recommended_questions: recommendedQuestions.length > 0 ? recommendedQuestions : null,
+          status: 'ready',
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', doc.id)
     } catch (e) {
       console.error('AI processing error:', e)
