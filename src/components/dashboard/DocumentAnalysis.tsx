@@ -14,6 +14,7 @@ import {
   Hash, MessageSquare, Lightbulb, AlignLeft,
   Send, BrainCircuit, Loader2, Trash2, CheckCircle2, Circle,
   Languages, Copy, Check, Download, Zap, Info, BookOpenCheck,
+  Presentation as PresentationIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -21,8 +22,9 @@ import type { Document, Conversation } from '@/types'
 import { buttonVariants } from '@/lib/button-variants'
 import { MarkdownContent } from '@/components/shared/MarkdownContent'
 import { QuizTab } from '@/components/dashboard/QuizTab'
+import { PresentationTab } from '@/components/dashboard/PresentationTab'
 
-type Tab = 'summary' | 'keypoints' | 'qa' | 'translate' | 'quiz'
+type Tab = 'summary' | 'keypoints' | 'qa' | 'translate' | 'quiz' | 'presentation'
 type TranslateDir = 'ko-en' | 'en-ko'
 type SummaryStyle = 'detailed' | 'brief' | 'oneliner' | 'simple' | 'expert'
 
@@ -419,11 +421,13 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
   }
 
   function handleTabClick(id: Tab) {
-    if ((id === 'translate' || id === 'quiz') && !isPro) {
-      const hint = id === 'translate'
-        ? '번역 기능은 Pro 전용입니다. 업그레이드하면 문서를 한↔영으로 번역할 수 있습니다.'
-        : '퀴즈 기능은 Pro 전용입니다. 업그레이드하면 문서 내용으로 AI 퀴즈를 생성할 수 있습니다.'
-      setUpgradeHint(hint)
+    if ((id === 'translate' || id === 'quiz' || id === 'presentation') && !isPro) {
+      const hints: Record<string, string> = {
+        translate: '번역 기능은 Pro 전용입니다. 업그레이드하면 문서를 한↔영으로 번역할 수 있습니다.',
+        quiz: '퀴즈 기능은 Pro 전용입니다. 업그레이드하면 문서 내용으로 AI 퀴즈를 생성할 수 있습니다.',
+        presentation: '프레젠테이션 기능은 Pro 전용입니다. 업그레이드하면 문서로 PPTX 슬라이드를 자동 생성할 수 있습니다.',
+      }
+      setUpgradeHint(hints[id])
       setUpgradeOpen(true)
       return
     }
@@ -436,6 +440,7 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
     { id: 'qa' as Tab, label: '질의응답', icon: MessageSquare },
     { id: 'translate' as Tab, label: '번역', icon: Languages, proOnly: true },
     { id: 'quiz' as Tab, label: '퀴즈', icon: BookOpenCheck, proOnly: true },
+    { id: 'presentation' as Tab, label: '프레젠테이션', icon: PresentationIcon, proOnly: true },
   ]
 
   return (
@@ -944,6 +949,15 @@ export function DocumentAnalysis({ document: doc, initialConversations, isPro }:
             {/* Quiz tab */}
             {tab === 'quiz' && (
               <QuizTab documentId={doc.id} disabled={docStatus !== 'ready'} />
+            )}
+
+            {/* Presentation tab */}
+            {tab === 'presentation' && (
+              <PresentationTab
+                documentId={doc.id}
+                documentTitle={doc.title}
+                disabled={docStatus !== 'ready'}
+              />
             )}
           </div>
         </Card>

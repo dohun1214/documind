@@ -410,3 +410,83 @@ export async function analyzePdfWithVision(pdfBase64: string): Promise<string> {
   })
   return message.content[0].type === 'text' ? message.content[0].text : ''
 }
+
+// ─── Presentation Generation ──────────────────────────────────────────────────
+
+export type PresentationStyle = 'business' | 'academic' | 'casual'
+export type PresentationLanguage = 'ko' | 'en'
+
+export interface PresentationSlide {
+  slideNumber: number
+  title: string
+  content: string[]
+  notes: string
+}
+
+export interface PresentationData {
+  title: string
+  slides: PresentationSlide[]
+}
+
+const STYLE_PROMPTS_PRES: Record<PresentationStyle, string> = {
+  business: '비즈니스 스타일 — 데이터와 결론 중심, 깔끔하고 전문적으로',
+  academic: '학술 스타일 — 연구 방법론, 결과, 논의 구조로 논문/연구 발표용으로',
+  casual: '캐주얼 스타일 — 쉬운 설명과 비유를 활용해 가볍고 친근하게',
+}
+
+export async function generatePresentation(
+  fullText: string,
+  slideCount: number,
+  style: PresentationStyle,
+  language: PresentationLanguage
+): Promise<PresentationData | null> {
+  const langLabel = language === 'ko' ? '한국어' : 'English'
+
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 4096,
+    system: SYSTEM_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `이 문서 내용을 바탕으로 프레젠테이션 슬라이드를 만들어줘.
+
+설정:
+- 슬라이드 수: ${slideCount}장
+- 스타일: ${STYLE_PROMPTS_PRES[style]}
+- 언어: ${langLabel} (모든 텍스트를 ${langLabel}로 작성)
+
+반드시 아래 JSON 형식으로만 응답해줘:
+{
+  "title": "프레젠테이션 제목",
+  "slides": [
+    {
+      "slideNumber": 1,
+      "title": "슬라이드 제목",
+      "content": ["핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3"],
+      "notes": "발표자 노트 — 이 슬라이드에서 말할 내용을 2~3문장으로"
+    }
+  ]
+}
+
+규칙:
+- 첫 슬라이드: 제목 슬라이드 (프레젠테이션 제목 + 부제를 content[0]에)
+- 마지막 슬라이드: 요약 또는 Q&A
+- 각 슬라이드는 핵심 포인트 3~5개
+- 문서의 논리적 흐름을 따라 구성
+- JSON 외 다른 텍스트 절대 포함 금지
+
+문서:
+${truncate(fullText, 60000)}`,
+    }],
+  })
+
+  const text = message.content[0].type === 'text' ? message.content[0].text : '{}'
+  try {
+    const match = text.match(/\{[\s\S]*\}/)
+    const parsed = match ? JSON.parse(match[0]) : null
+    if (!parsed?.title || !Array.isArray(parsed.slides)) return null
+    return parsed as PresentationData
+  } catch {
+    return null
+  }
+}
